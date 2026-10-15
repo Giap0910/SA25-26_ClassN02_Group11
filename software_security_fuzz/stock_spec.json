@@ -1,0 +1,341 @@
+{
+  "name": "badminton_stock",
+  "version": 1,
+  "scope": "Một sản phẩm, tối đa một biến thể; không mô hình hóa khóa, giá, voucher và PayOS.",
+  "backend_sha256": {
+    "OrderService.java": "7c40dc928498fcd79af6bb278f8ce4a0f4b759f1efe76b3af94a99ef9caea53d",
+    "ProductVariantService.java": "d19b7c8e5271a2cc005df62b172a773ddeb8655935cd0ff88a1e1c5a0648f6d7"
+  },
+  "operations": {
+    "reserve": [
+      {"when": "q < 1 or q > 100", "return": 1},
+      {"when": "available < q", "return": 2},
+      {"when": "reserved + q > 2147483647", "return": 3},
+      {"when": "variant and va < q", "return": 4},
+      {"when": "variant and vr + q > 2147483647", "return": 5},
+      {"set": "available", "value": "available - q"},
+      {"set": "reserved", "value": "reserved + q"},
+      {"when": "variant", "set": "va", "value": "va - q"},
+      {"when": "variant", "set": "vr", "value": "vr + q"},
+      {"set": "state", "value": "1"}
+    ],
+    "settle": [
+      {"when": "state != 1", "return": 0},
+      {"when": "reserved < q or (variant and vr < q)", "return": 6},
+      {"when": "restore and variant and va + q > 2147483647", "return": 7},
+      {"set": "reserved", "value": "reserved - q"},
+      {"when": "restore", "set": "available", "value": "q", "mode": "java_add"},
+      {"when": "variant", "set": "vr", "value": "vr - q"},
+      {"when": "variant and restore", "set": "va", "value": "va + q"},
+      {"when": "restore", "set": "state", "value": "2"},
+      {"when": "not restore", "set": "state", "value": "3"}
+    ]
+  },
+  "traceability": [
+    {"requirement": "REQ-1", "source": "OrderService.validateRequestedItems", "rule": "reserve/quantity", "cases": "TC-1"},
+    {"requirement": "REQ-2", "source": "OrderService.validateProductForOrder", "rule": "reserve/available", "cases": "TC-2"},
+    {"requirement": "REQ-3", "source": "OrderService reservedStock long guard", "rule": "reserve/reserved", "cases": "TC-3"},
+    {"requirement": "REQ-4", "source": "OrderService.cancelOrder; settleReservedStock", "rule": "settle/restore/state", "cases": "TC-4"},
+    {"requirement": "REQ-5", "source": "OrderService COD settlement", "rule": "settle/no restore/state", "cases": "TC-5"},
+    {"requirement": "REQ-6", "source": "ProductVariantService.reserve", "rule": "reserve/variant", "cases": "TC-6"}
+  ],
+  "teacher_tables": {
+    "ThongTin": [
+      [
+        "Truong",
+        "GiaTri"
+      ],
+      [
+        "name",
+        "badminton_stock"
+      ],
+      [
+        "description",
+        "Mô hình giữ, hoàn và tất toán kho từ OrderService và ProductVariantService. Bộ sinh riêng sinh nghiệp vụ C từ đặc tả JSON, giữ adapter nhị phân C có sẵn; runner fuzz C chạy riêng. Hai hàm arithmetic của Spec Verification Lab chỉ minh họa phép cộng, không phải simulator đầy đủ. Kết quả API và coverage lưu riêng, không được ứng dụng tự nhập từ Excel."
+      ]
+    ],
+    "YeuCauChucNang": [
+      [
+        "ID",
+        "MoTa",
+        "DanhMuc",
+        "MucUuTien"
+      ],
+      [
+        "REQ-1",
+        "Số lượng phải từ 1 đến 100.",
+        "functional",
+        "HIGH"
+      ],
+      [
+        "REQ-2",
+        "Không giữ hàng khi kho khả dụng không đủ.",
+        "safety",
+        "HIGH"
+      ],
+      [
+        "REQ-3",
+        "Giữ kho không làm tràn reserved int32.",
+        "safety",
+        "HIGH"
+      ],
+      [
+        "REQ-4",
+        "Hủy sau giữ kho hoàn đúng số lượng một lần.",
+        "safety",
+        "HIGH"
+      ],
+      [
+        "REQ-5",
+        "Tất toán tiêu thụ giữ chỗ, không trừ khả dụng lần hai.",
+        "safety",
+        "HIGH"
+      ],
+      [
+        "REQ-6",
+        "Biến thể không đủ hàng phải bị từ chối.",
+        "functional",
+        "HIGH"
+      ]
+    ],
+    "YeuCauPhiChucNang": [
+      [
+        "ID",
+        "MoTa",
+        "MucUuTien"
+      ],
+      [
+        "NFR-1",
+        "Mỗi tiến trình mục tiêu có ngân sách timeout 2 giây; đây là cấu hình test, không phải thành tích web.",
+        "MEDIUM"
+      ],
+      [
+        "NFR-2",
+        "Ba seed 1, 7, 42 cho mỗi chế độ; kết quả chưa chạy không ghi PASS.",
+        "MEDIUM"
+      ],
+      [
+        "NFR-3",
+        "Lưu 100% đầu vào gây bất thường trong chiến dịch.",
+        "HIGH"
+      ]
+    ],
+    "RangBuoc": [
+      [
+        "ID",
+        "MoTa",
+        "MucUuTien"
+      ],
+      [
+        "CON-1",
+        "Simulator C11, runner Python. Fuzz C độc lập; kiểm thử HTTP bổ sung chỉ chạy backend và database thử tách biệt.",
+        "HIGH"
+      ],
+      [
+        "CON-2",
+        "Envelope test dài 28 byte, BDMN + 5 int32 little-endian + uint32 action; không phải định dạng API web.",
+        "HIGH"
+      ],
+      [
+        "CON-3",
+        "Miền ban đầu kho không âm; có biến thể thì kho tổng bằng kho biến thể.",
+        "HIGH"
+      ],
+      [
+        "CON-4",
+        "Hành vi khóa/rollback chỉ trừu tượng hóa; không chứng minh đồng thời database.",
+        "HIGH"
+      ],
+      [
+        "CON-5",
+        "Đối chiếu hash backend trước khi dùng kết quả cho phiên bản mới.",
+        "HIGH"
+      ]
+    ],
+    "MoHinhTrangThai": [
+      [
+        "TrangThai",
+        "KhoiTao",
+        "Nhan",
+        "ChuyenDenCacTrangThai"
+      ],
+      [
+        "ready",
+        "x",
+        "safe, ready",
+        "reserved, rejected"
+      ],
+      [
+        "reserved",
+        "",
+        "safe, reserved",
+        "reserved, cancelled, settled"
+      ],
+      [
+        "rejected",
+        "",
+        "safe, rejected",
+        "rejected"
+      ],
+      [
+        "cancelled",
+        "",
+        "safe, cancelled",
+        "cancelled"
+      ],
+      [
+        "settled",
+        "",
+        "safe, settled",
+        "settled"
+      ]
+    ],
+    "ThuocTinhAnToan": [
+      [
+        "CongThucCTL"
+      ],
+      [
+        "AG(!violation)"
+      ],
+      [
+        "EF(reserved)"
+      ],
+      [
+        "EF(cancelled)"
+      ],
+      [
+        "EF(settled)"
+      ],
+      [
+        "AG(!(cancelled & settled))"
+      ]
+    ],
+    "LoaiTruLanNhau": [
+      [
+        "MenhDe1",
+        "MenhDe2"
+      ],
+      [
+        "cancelled",
+        "settled"
+      ]
+    ],
+    "HamSinhMa": [
+      [
+        "Ten",
+        "NgonNgu",
+        "Loai",
+        "ThamSo",
+        "KichThuocBuffer",
+        "Loi",
+        "GiaTriBiMat1",
+        "GiaTriBiMat2"
+      ],
+      [
+        "reserved_sum_expression",
+        "c",
+        "arithmetic",
+        "a, b",
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        "release_sum_expression",
+        "c",
+        "arithmetic",
+        "a, b",
+        null,
+        null,
+        null,
+        null
+      ]
+    ],
+    "KiemTraSoHoc": [
+      [
+        "Ten",
+        "BienSoNguyen",
+        "DieuKien",
+        "BieuThucTran"
+      ],
+      [
+        "reserved_add",
+        "r, q",
+        "r >= 0 and q >= 1 and q <= 100 and r + q > 2147483647",
+        "r + q"
+      ],
+      [
+        "available_release",
+        "a, q",
+        "a >= 0 and q >= 1 and q <= 100 and a + q > 2147483647",
+        "a + q"
+      ]
+    ],
+    "TestCase": [
+      [
+        "ID",
+        "YeuCauLienQuan",
+        "TieuDe",
+        "DieuKienTienQuyet",
+        "CacBuoc",
+        "KetQuaMongDoi",
+        "MucUuTien"
+      ],
+      [
+        "TC-1",
+        "REQ-1",
+        "Số lượng sai",
+        "Kho 10, giữ 0",
+        "Thử q=-1,0,101",
+        "Từ chối, kho không đổi",
+        "HIGH"
+      ],
+      [
+        "TC-2",
+        "REQ-2",
+        "Thiếu kho",
+        "Kho 0, giữ 0",
+        "Giữ q=1",
+        "Từ chối",
+        "HIGH"
+      ],
+      [
+        "TC-3",
+        "REQ-3",
+        "Tràn giữ chỗ",
+        "Kho 100, giữ INT_MAX",
+        "Giữ q=1",
+        "Từ chối",
+        "HIGH"
+      ],
+      [
+        "TC-4",
+        "REQ-4",
+        "Hủy lặp",
+        "Kho 10, giữ 0",
+        "Giữ 2\nHủy\nHủy lại",
+        "Kho 10, giữ 0",
+        "HIGH"
+      ],
+      [
+        "TC-5",
+        "REQ-5",
+        "Tất toán lặp",
+        "Kho 10, giữ 0",
+        "Giữ 2\nTất toán\nTất toán lại",
+        "Kho 8, giữ 0",
+        "HIGH"
+      ],
+      [
+        "TC-6",
+        "REQ-6",
+        "Kho biến thể thiếu",
+        "Kho tổng/biến thể 0",
+        "Giữ 1 với biến thể",
+        "Từ chối",
+        "HIGH"
+      ]
+    ]
+  }
+}
